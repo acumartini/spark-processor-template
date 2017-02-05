@@ -16,9 +16,9 @@ import org.rogach.scallop.{ScallopConf, ScallopOption}
 import org.slf4j.LoggerFactory
 import org.spark_project.guava.util.concurrent.RateLimiter
 import spark.cassandra.Connector
-import spark.model.Identity.{CoreFields, IdentityPayload}
-import spark.model.{RawIdentityEvent, UniqueFields}
-import spark.processor.UniqueUpmIdProcessor
+import spark.model.Template.{CoreFields, EventPayload}
+import spark.model.{RawEvent, UniqueFields}
+import spark.processor.UniqueIdProcessor
 import spark.util.ScalaExtensions
 
 import scala.util.Random
@@ -56,7 +56,7 @@ object CassandraDynamicExtractionPOC {
 		val conf: SparkConf = new SparkConf()
 			.setAppName("CassandraConnectorPOC")
 			.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-			.registerKryoClasses(Array(classOf[RawIdentityEvent], classOf[UniqueFields]))
+			.registerKryoClasses(Array(classOf[RawEvent], classOf[UniqueFields]))
 			.set("spark.cassandra.connection.host", host)
 			.set("spark.cassandra.connection.port", port.toString)
 			.set("spark.yarn.executor.memoryOverhead", "10G")
@@ -90,18 +90,18 @@ object CassandraDynamicExtractionPOC {
 		idRanges.foreach(idRange => {
 			val seedEvents = idRange.flatMap(i => {
 				eventRange.map(_ => {
-					IdentityPayload[CoreFields](
-						id = upmId(i),
-						time = IdentityPayload.time(randomTime),
+					EventPayload[CoreFields](
+						id = genId(i),
+						time = EventPayload.time(randomTime),
 						set = CoreFields(
-							Some(upmId(i))
+							Some(genId(i))
 						)
 					)
 				})
 			})
 				.map(payload => {
 					broadcastMapper.value.registerModule(DefaultScalaModule)
-					RawIdentityEvent.from(
+					RawEvent.from(
 						payload,
 						broadcastMapper.value.writeValueAsString(payload)
 					)
@@ -124,17 +124,17 @@ object CassandraDynamicExtractionPOC {
 			.format("org.apache.spark.sql.cassandra")
 			.options(mockEventsKeyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 			.count()
 		log.info(s"Seed event record count [$seedEventCount].")
 
-		// load static identity core events from Cassandra
+		// load static template core events from Cassandra
 		val staticCoreEvents = sqlContext
 			.read
 			.format("org.apache.spark.sql.cassandra")
 			.options(mockEventsKeyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 
 		// map static events to UniqueFields RDD
 		val staticUniqueIds = staticCoreEvents
@@ -142,16 +142,16 @@ object CassandraDynamicExtractionPOC {
 			.persist(StorageLevel.MEMORY_AND_DISK_SER)
 		  .rdd
 
-		// dedup static upmIds for each partition and write them to S3 as text files
-		UniqueUpmIdProcessor.process(staticUniqueIds)
-			.map({ case(upmId, _) => s"$upmId" })
-			.saveAsTextFile(s"s3://$processorS3Bucket/test/upmIds/")
+		// dedup static ids for each partition and write them to S3 as text files
+		UniqueIdProcessor.process(staticUniqueIds)
+			.map({ case(id, _) => s"$id" })
+			.saveAsTextFile(s"s3://$processorS3Bucket/test/ids/")
 
 		// read static dedup'ed ids back from S3 and verify count
-		val staticS3UniqueIds = sc.textFile(s"s3://$processorS3Bucket/test/upmIds/")
-			.map(upmId => (upmId, 1))
+		val staticS3UniqueIds = sc.textFile(s"s3://$processorS3Bucket/test/ids/")
+			.map(id => (id, 1))
 			.reduceByKey(_ + _)
-		log.info(s"Static dedup'ed upmId count from S3 [${staticS3UniqueIds.count()}]")
+		log.info(s"Static dedup'ed id count from S3 [${staticS3UniqueIds.count()}]")
 
 		// cleanup test bucket
 		clearS3Data(sc, processorS3Bucket)
@@ -164,11 +164,11 @@ object CassandraDynamicExtractionPOC {
 			while (true) {
 				limiter.acquire()
 				val id = random.nextInt(numUniqueUsers) + numUniqueUsers // new user
-				val payload = IdentityPayload[CoreFields](
-					id = upmId(id),
-					time = IdentityPayload.time(randomTime),
+				val payload = EventPayload[CoreFields](
+					id = genId(id),
+					time = EventPayload.time(randomTime),
 					set = CoreFields(
-						Some(upmId(id))
+						Some(genId(id))
 					)
 				)
 				cc.withSessionDo(
@@ -181,17 +181,17 @@ object CassandraDynamicExtractionPOC {
 							""".stripMargin
 					)
 				})
-				log.info(s"Inserted event for user [${upmId(id)}]")
+				log.info(s"Inserted event for user [${genId(id)}]")
 			}
 		})
 
-		// load dynamic identity core events from Cassandra
+		// load dynamic template core events from Cassandra
 		val coreEvents = sqlContext
 			.read
 			.format("org.apache.spark.sql.cassandra")
 			.options(mockEventsKeyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 
 		// map dynamic events to UniqueFields RDD
 		val uniqueIds = coreEvents
@@ -199,16 +199,16 @@ object CassandraDynamicExtractionPOC {
 			.persist(StorageLevel.MEMORY_AND_DISK_SER)
 			.rdd
 
-		// dedup dynamic upmIds for each partition and write them to S3 as text files
-		UniqueUpmIdProcessor.process(uniqueIds)
-			.map({ case(upmId, _) => s"$upmId" })
-			.saveAsTextFile(s"s3://$processorS3Bucket/test/upmIds/")
+		// dedup dynamic ids for each partition and write them to S3 as text files
+		UniqueIdProcessor.process(uniqueIds)
+			.map({ case(id, _) => s"$id" })
+			.saveAsTextFile(s"s3://$processorS3Bucket/test/ids/")
 
 		// read dynamic dedup'ed ids back from S3 and verify count
-		val s3UniqueIds = sc.textFile(s"s3://$processorS3Bucket/test/upmIds/")
-			.map(upmId => (upmId, 1))
+		val s3UniqueIds = sc.textFile(s"s3://$processorS3Bucket/test/ids/")
+			.map(id => (id, 1))
 			.reduceByKey(_ + _)
-		log.info(s"Dynamic dedup'ed upmId count from S3 [${s3UniqueIds.count()}]")
+		log.info(s"Dynamic dedup'ed id count from S3 [${s3UniqueIds.count()}]")
 
 		// final dynamic event record count
 		val finalEventCount = sqlContext
@@ -216,17 +216,17 @@ object CassandraDynamicExtractionPOC {
 			.format("org.apache.spark.sql.cassandra")
 			.options(mockEventsKeyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 		  .count()
 		log.info(s"Final event record count [$finalEventCount] with [${finalEventCount - seedEventCount}] records inserted during processing.")
 
 		// compare static and dynamic extraction sets
-		val upmIdDiff = staticS3UniqueIds.leftOuterJoin(s3UniqueIds)
+		val idDiff = staticS3UniqueIds.leftOuterJoin(s3UniqueIds)
 			.collect({
 			  case (umpId, (_, None)) => umpId
 		  })
 			.collect
-		log.info(s"UpmIds found in static set but missing from dynamic set [${upmIdDiff.mkString(", ")}]")
+		log.info(s"Ids found in static set but missing from dynamic set [${idDiff.mkString(", ")}]")
 
 		// cleanup
 		cc.withSessionDo(truncateMockEventsTable)
@@ -234,10 +234,9 @@ object CassandraDynamicExtractionPOC {
 		sc.stop()
 	}
 
-	private def upmId(i: Int) = s"mock:upmId:$i"
+	private def genId(i: Int) = s"mock:id:$i"
 	private def randomTime: DateTime = DateTime.now().minusDays(random.nextInt(1000) + 1)
 	private def createMockEventsKeyspace(session: Session, numNodes: Int): Unit = session.execute(
-		// taken from idndx-perf using DESCRIBE KEYSPACE core;
 		s"""
 			 |CREATE KEYSPACE IF NOT EXISTS $mockEventsKeyspace WITH replication = {
 			 |  'class': 'NetworkTopologyStrategy',
@@ -246,7 +245,6 @@ object CassandraDynamicExtractionPOC {
 			""".stripMargin
 	)
 	private def createMockEventsTable(session: Session): Unit = session.execute(
-		// taken from idndx-perf using DESCRIBE TABLE core.event;
 		s"""
 			 |CREATE TABLE IF NOT EXISTS $mockEventsKeyspace.$mockEventsTable (
 			 |  id text,
@@ -280,7 +278,7 @@ object CassandraDynamicExtractionPOC {
 				sc.hadoopConfiguration
 			)
 			.delete(
-				new Path(s"s3://$processorBucket/test/upmIds/"),
+				new Path(s"s3://$processorBucket/test/ids/"),
 				true
 			)
 	}

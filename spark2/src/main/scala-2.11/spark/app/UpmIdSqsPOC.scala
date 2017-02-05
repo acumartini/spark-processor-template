@@ -5,20 +5,20 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.rogach.scallop.{ScallopConf, ScallopOption}
-import spark.cassandra.{Connector, IdentityDB}
+import spark.cassandra.{Connector, TemplateDB}
 import spark.client.SQSClient
-import spark.model.{RawIdentityEvent, UniqueFields}
-import spark.processor.{UniqueUpmIdProcessor, UpmIdSqsProcessor}
+import spark.model.{RawEvent, UniqueFields}
+import spark.processor.{UniqueIdProcessor, IdSqsProcessor}
 
 /**
 	*
 	* @author Adam Martini
 	*/
-object UpmIdSqsPOC {
+object IdSqsPOC {
 
 	def main(args: Array[String]): Unit = {
 		// parse optional arguments
-		val params = new UpmIdSqsParams(args)
+		val params = new IdSqsParams(args)
 		val config: Config = ConfigFactory.load(s"processor-${params.env.getOrElse("test")}")
 		val sqsEndpoint = config.getString("corroborator.sqs.endpoint")
 		val sqsQueueName = config.getString("corroborator.sqs.queueName ")
@@ -27,7 +27,7 @@ object UpmIdSqsPOC {
 		val conf: SparkConf = new SparkConf()
 			.setAppName("CassandraConnectorPOC")
 			.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-			.registerKryoClasses(Array(classOf[RawIdentityEvent], classOf[UniqueFields]))
+			.registerKryoClasses(Array(classOf[RawEvent], classOf[UniqueFields]))
 			.set("spark.cassandra.connection.host", params.host.getOrElse(Connector.host))
 			.set("spark.cassandra.connection.port", params.port.getOrElse(Connector.port).toString)
 		val sc = new SparkContext(conf)
@@ -38,13 +38,13 @@ object UpmIdSqsPOC {
 			.getOrCreate()
 		import sqlContext.implicits._ // required for implicit Encoders
 
-		// load identity core events from Cassandra
+		// load template core events from Cassandra
 		val coreEvents = sqlContext
 			.read
 			.format("org.apache.spark.sql.cassandra")
-			.options(IdentityDB.CoreTable.keyspaceTableMap)
+			.options(TemplateDB.CoreTable.keyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 
 		// map events to uniqueIds RDD
 		val uniqueFields = coreEvents
@@ -53,11 +53,11 @@ object UpmIdSqsPOC {
 		  .rdd
 
 		// dedup user events
-		val dedupedUniqueFields = UniqueUpmIdProcessor.process(uniqueFields)
-			.map({ case(upmId,  _) => UniqueFields(upmId) })
+		val dedupedUniqueFields = UniqueIdProcessor.process(uniqueFields)
+			.map({ case(id,  _) => UniqueFields(id) })
 
-		// write upmIds to SQS
-		UpmIdSqsProcessor.process(
+		// write ids to SQS
+		IdSqsProcessor.process(
 			dedupedUniqueFields,
 			new SQSClient(sqsEndpoint),
 			sqsQueueName
@@ -67,7 +67,7 @@ object UpmIdSqsPOC {
 	}
 }
 
-class UpmIdSqsParams(arguments: Seq[String]) extends ScallopConf(arguments) {
+class IdSqsParams(arguments: Seq[String]) extends ScallopConf(arguments) {
 	val host: ScallopOption[String] = opt[String]()
 	val port: ScallopOption[Int] = opt[Int]()
 	val env: ScallopOption[String] = opt[String]()

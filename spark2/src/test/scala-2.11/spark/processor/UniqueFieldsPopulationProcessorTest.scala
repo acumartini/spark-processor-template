@@ -8,8 +8,8 @@ import org.apache.spark.sql.SaveMode
 import org.joda.time.DateTime
 import spark.cassandra.MockTables.{ContactEvents, CoreEvents}
 import spark.cassandra.{DBCleanupBeforeAndAfterEach, TestConnector}
-import spark.model.Identity.{ContactFields, CoreFields, IdentityEvent, IdentityPayload}
-import spark.model.{RawIdentityEvent, UniqueFields}
+import spark.model.Template.{ContactFields, CoreFields, Event, EventPayload}
+import spark.model.{RawEvent, UniqueFields}
 import spark.{AbstractSparkTest, SparkSqlContext}
 
 import scala.util.Random
@@ -44,8 +44,8 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 
 	behavior of appName
 
-	def upmId(i: Int = 0) = s"mock:upmId:$i"
-	def nuId(i: Int = 0) = s"mock:nuId:$i"
+	def genId(i: Int = 0) = s"mock:id:$i"
+	def otherId(i: Int = 0) = s"mock:otherId:$i"
 	def username(i: Int = 0) = s"mock:username:$i"
 	def verifiedPhone(i: Int = 0) = s"mock:verifiedPhone:$i"
 
@@ -59,29 +59,29 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 		val broadcastMapper = sc.broadcast(mapper)
 		val cc = CassandraConnector(sc.getConf)
 
-		Given("Events for upmIds stored in cassandra")
+		Given("Events for ids stored in cassandra")
 		val idRange = Range(0, 100)
 		val eventRange = Range(0, random.nextInt(5) + 1)
 
-		val uniqueFieldsObjs = idRange.map(i => UniqueFields(upmId(i)))
+		val uniqueFieldsObjs = idRange.map(i => UniqueFields(genId(i)))
 
 		val coreEvents = idRange.flatMap(i => {
 			val oldEvents = eventRange.map(_ => {
-				IdentityPayload[CoreFields](
-					id = upmId(i),
-					time = IdentityPayload.time(oldTime),
+				EventPayload[CoreFields](
+					id = genId(i),
+					time = EventPayload.time(oldTime),
 					set = CoreFields(
-						Some(upmId(i)),
+						Some(genId(i)),
 						Some(oldValue),
 						Some(oldValue)
 					)
 				)
 			})
-			val newEvent = IdentityPayload[CoreFields](
-				id = upmId(i),
+			val newEvent = EventPayload[CoreFields](
+				id = genId(i),
 				set = CoreFields(
-					Some(upmId(i)),
-					Some(nuId(i)),
+					Some(genId(i)),
+					Some(otherId(i)),
 					Some(username(i))
 				)
 			)
@@ -89,7 +89,7 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 		})
 			.map(payload => {
 				broadcastMapper.value.registerModule(DefaultScalaModule)
-				RawIdentityEvent.from(
+				RawEvent.from(
 					payload,
 					broadcastMapper.value.writeValueAsString(payload)
 				)
@@ -98,16 +98,16 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 
 		val contactEvents = idRange.flatMap(i => {
 			val oldEvents = eventRange.map(_ => {
-				IdentityPayload[ContactFields](
-					id = upmId(i),
-					time = IdentityPayload.time(oldTime),
+				EventPayload[ContactFields](
+					id = genId(i),
+					time = EventPayload.time(oldTime),
 					set = ContactFields(
 						Some(oldValue)
 					)
 				)
 			})
-			val newEvent = IdentityPayload[ContactFields](
-				id = upmId(i),
+			val newEvent = EventPayload[ContactFields](
+				id = genId(i),
 				set = ContactFields(
 					Some(verifiedPhone(i))
 				)
@@ -116,7 +116,7 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 		})
 			.map(payload => {
 				broadcastMapper.value.registerModule(DefaultScalaModule)
-				RawIdentityEvent.from(
+				RawEvent.from(
 					payload,
 					broadcastMapper.value.writeValueAsString(payload)
 				)
@@ -134,7 +134,7 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 			.mode(SaveMode.Append)
 			.save()
 
-		Given("UniqueFields objects with only a upmId")
+		Given("UniqueFields objects with only a id")
 		val uniqueFieldsRdd = sc.parallelize(uniqueFieldsObjs)
 
 		Given("Events extracted from Cassandra for each UniqueFields object")
@@ -153,9 +153,9 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 		UniqueFieldsPopulationProcessor.process(uniqueFieldsEventsRdd)
 			.collect()
 			.foreach(result => {
-				val id = result.upmId.substring(result.upmId.lastIndexOf(":") + 1).toInt
-				result.upmId shouldEqual upmId(id)
-				result.nuId shouldEqual Some(nuId(id))
+				val id = result.id.substring(result.id.lastIndexOf(":") + 1).toInt
+				result.id shouldEqual genId(id)
+				result.otherId shouldEqual Some(otherId(id))
 				result.username shouldEqual Some(username(id))
 				result.verifiedPhone shouldEqual Some(verifiedPhone(id))
 			})
@@ -164,28 +164,28 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 	it should "properly handle $rem statements" in {
 		Given("Events with latest record remove statement")
 		val coreEvents = List(
-			IdentityEvent.from(
-				IdentityPayload[CoreFields](
-					id = upmId(),
-					time = IdentityPayload.time(oldTime),
+			Event.from(
+				EventPayload[CoreFields](
+					id = genId(),
+					time = EventPayload.time(oldTime),
 					set = CoreFields(
-						Some(upmId()),
-						Some(nuId()),
+						Some(genId()),
+						Some(otherId()),
 						Some(username())
 					)
 				)
 			),
-			IdentityEvent.from(
-				IdentityPayload[CoreFields](
-					id = upmId(),
+			Event.from(
+				EventPayload[CoreFields](
+					id = genId(),
 					set = CoreFields(),
-					rem = List("nuId", "username")
+					rem = List("otherId", "username")
 				)
 			)
 		)
 		val uniqueFieldsEventsRdd = sc.parallelize(Seq(
 			UniqueFieldsEvents(
-				UniqueFields(upmId()),
+				UniqueFields(genId()),
 				coreEvents
 			)
 		))
@@ -194,8 +194,8 @@ class UniqueFieldsPopulationProcessorTest extends AbstractSparkTest
 		UniqueFieldsPopulationProcessor.process(uniqueFieldsEventsRdd)
 			.collect()
 			.foreach(result => {
-				result.upmId shouldEqual upmId()
-				result.nuId shouldBe None
+				result.id shouldEqual genId()
+				result.otherId shouldBe None
 				result.username shouldBe None
 				result.verifiedPhone shouldBe None
 			})

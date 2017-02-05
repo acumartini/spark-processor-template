@@ -18,7 +18,7 @@ lazy val common = project.from("common").cross
 
 lazy val `common_2_10` = common(Versions.scala_2_10)
 	.settings(
-		libraryDependencies ++= Dependencies.idnProcessorCommon,
+		libraryDependencies ++= Dependencies.processorCommon,
 		Settings.common ++ Seq(
 			test in assembly := {}
 		)
@@ -26,7 +26,7 @@ lazy val `common_2_10` = common(Versions.scala_2_10)
 
 lazy val `common_2_11` = common(Versions.scala_2_11)
 	.settings(
-		libraryDependencies ++= Dependencies.idnProcessorCommon,
+		libraryDependencies ++= Dependencies.processorCommon,
 		Settings.common ++ Seq(
 			test in assembly := {}
 		)
@@ -37,7 +37,7 @@ lazy val `spark1_6` = project.from("spark1_6")
 	.settings(
 		name := "spark1_6",
 		scalaVersion := Versions.scala_2_10,
-		libraryDependencies ++= Dependencies.idnProcessorSpark1_6,
+		libraryDependencies ++= Dependencies.processorSpark1_6,
 		Settings.common ++ Seq(
 			test in assembly := {},
 			assemblyJarName in assembly := "spark1_6-shaded.jar"
@@ -49,7 +49,7 @@ lazy val `spark2` = project.from("spark2")
 	.settings(
 		name := "spark2",
 		scalaVersion := Versions.scala_2_11,
-		libraryDependencies ++= Dependencies.idnProcessorSpark2,
+		libraryDependencies ++= Dependencies.processorSpark2,
 		Settings.common ++ Seq(
 			test in assembly := {},
 			assemblyJarName in assembly := "spark2-shaded.jar"

@@ -5,20 +5,20 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.rogach.scallop.{ScallopConf, ScallopOption}
-import spark.cassandra.{Connector, IdentityDB}
+import spark.cassandra.{Connector, TemplateDB}
 import spark.client.SNSClient
-import spark.model.{RawIdentityEvent, UniqueFields}
-import spark.processor.{UniqueUpmIdProcessor, UpmIdSnsProcessor}
+import spark.model.{RawEvent, UniqueFields}
+import spark.processor.{UniqueIdProcessor, IdSnsProcessor}
 
 /**
 	*
 	* @author Adam Martini
 	*/
-object UpmIdSnsPOC {
+object IdSnsPOC {
 
 	def main(args: Array[String]): Unit = {
 		// parse optional arguments
-		val params = new UpmIdSnsParams(args)
+		val params = new IdSnsParams(args)
 		val config: Config = ConfigFactory.load(s"processor-${params.env.getOrElse("test")}")
 		val snsRegion = config.getString("corroborator.sns.region")
 		val snsTopicArn = config.getString("corroborator.sns.topicArn")
@@ -28,7 +28,7 @@ object UpmIdSnsPOC {
 		val conf: SparkConf = new SparkConf()
 			.setAppName("CassandraConnectorPOC")
 			.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-			.registerKryoClasses(Array(classOf[RawIdentityEvent], classOf[UniqueFields]))
+			.registerKryoClasses(Array(classOf[RawEvent], classOf[UniqueFields]))
 			.set("spark.cassandra.connection.host", params.host.getOrElse(Connector.host))
 			.set("spark.cassandra.connection.port", params.port.getOrElse(Connector.port).toString)
 			.set("spark.default.parallelism", "100")
@@ -40,13 +40,13 @@ object UpmIdSnsPOC {
 			.getOrCreate()
 		import sqlContext.implicits._ // required for implicit Encoders
 
-		// load identity core events from Cassandra
+		// load template core events from Cassandra
 		val coreEvents = sqlContext
 			.read
 			.format("org.apache.spark.sql.cassandra")
-			.options(IdentityDB.CoreTable.keyspaceTableMap)
+			.options(TemplateDB.CoreTable.keyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 
 		// map events to uniqueIds RDD
 		val uniqueFields = coreEvents
@@ -55,11 +55,11 @@ object UpmIdSnsPOC {
 		  .rdd
 
 		// dedup user events
-		val dedupedUniqueFields = UniqueUpmIdProcessor.process(uniqueFields)
-			.map({ case(upmId,  _) => UniqueFields(upmId) })
+		val dedupedUniqueFields = UniqueIdProcessor.process(uniqueFields)
+			.map({ case(id,  _) => UniqueFields(id) })
 
-		// write upmIds to SNS
-		UpmIdSnsProcessor.process(
+		// write ids to SNS
+		IdSnsProcessor.process(
 			dedupedUniqueFields,
 			new SNSClient(snsRegion),
 			snsTopicArn
@@ -69,7 +69,7 @@ object UpmIdSnsPOC {
 	}
 }
 
-class UpmIdSnsParams(arguments: Seq[String]) extends ScallopConf(arguments) {
+class IdSnsParams(arguments: Seq[String]) extends ScallopConf(arguments) {
 	val host: ScallopOption[String] = opt[String]()
 	val port: ScallopOption[Int] = opt[Int]()
 	val env: ScallopOption[String] = opt[String]()

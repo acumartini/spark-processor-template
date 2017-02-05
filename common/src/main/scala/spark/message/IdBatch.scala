@@ -12,19 +12,19 @@ import scala.collection.JavaConversions._
 	*
 	* @author Adam Martini
 	*/
-case class UpmIdBatch(
-	upmIdBatch: Iterable[String]
+case class IdBatch(
+	idBatch: Iterable[String]
 ) {
 	def toSendMessageBatchRequestEntry(mapper: ObjectMapper) = new SendMessageBatchRequestEntry(
 		UUID.randomUUID().toString,
-		mapper.writeValueAsString(upmIdBatch)
+		mapper.writeValueAsString(idBatch)
 	)
 }
-object UpmIdBatch {
-	def from(uniqueFieldsBatch: Iterable[UniqueFields]) = UpmIdBatch(uniqueFieldsBatch.map(_.upmId))
-	def toSendMessageBatchRequest(queueUrl: String, mapper: ObjectMapper, upmIdBatches: Iterable[UpmIdBatch]) =
+object IdBatch {
+	def from(uniqueFieldsBatch: Iterable[UniqueFields]) = IdBatch(uniqueFieldsBatch.map(_.id))
+	def toSendMessageBatchRequest(queueUrl: String, mapper: ObjectMapper, idBatches: Iterable[IdBatch]) =
 		new SendMessageBatchRequest(
 			queueUrl,
-			upmIdBatches.map(_.toSendMessageBatchRequestEntry(mapper)).toList
+			idBatches.map(_.toSendMessageBatchRequestEntry(mapper)).toList
 		)
 }

@@ -16,7 +16,7 @@ trait SparkS3Configuration extends AbstractSparkTest {
 
 	val accessKey: String = config.getString("spark.s3.processor.access.key")
 	val secretKey: String = config.getString("spark.s3.processor.secret.key")
-	val bucket: String = "idn-processor"
+	val bucket: String = "processor"
 
 	override def beforeAll() {
 		super.beforeAll()

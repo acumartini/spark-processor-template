@@ -5,7 +5,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import spark.cassandra.MockTables.{UniquenessIndexLookupTable, UniquenessIndexTable}
 import spark.cassandra.{DBCleanupBeforeAndAfterEach, TestConnector}
-import spark.model.Identity.{UniquenessIndex, UniquenessIndexKeyValue, UniquenessIndexLookup}
+import spark.model.Template.{UniquenessIndex, UniquenessIndexKeyValue, UniquenessIndexLookup}
 import spark.model.UniqueFields
 import spark.{AbstractSparkTest, SparkSqlContext}
 
@@ -35,8 +35,8 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 
 	behavior of "UniquenessIndexProcessor"
 
-	def upmId(i: Int = 0) = s"mock:upmId:$i"
-	def nuId(i: Int = 0) = s"mock:nuId:$i"
+	def id(i: Int = 0) = s"mock:id:$i"
+	def otherId(i: Int = 0) = s"mock:otherId:$i"
 	def username(i: Int = 0) = s"mock:username:$i"
 	def verifiedPhone(i: Int = 0) = s"mock:verifiedPhone:$i"
 	def extractIdIndex(id: String): Int = id.substring(id.lastIndexOf(":") + 1).toInt
@@ -50,8 +50,8 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 
 		Given("an list of UniqueFields objects")
 		val uniqueFieldsObjs = (0 until 100).map(i => UniqueFields(
-			upmId(i),
-			Some(nuId(i)),
+			id(i),
+			Some(otherId(i)),
 			Some(username(i)),
 			Some(verifiedPhone(i))
 		))
@@ -59,32 +59,32 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 		Given("existing uniqueness index and uniqueness index lookup entries for each UniqueFields object")
 		val uniquenessIndexDS = (0 until 100).flatMap(i => List(
 			UniquenessIndex(
-				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId(i)),
-				upmId(i)
+				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId(i)),
+				id(i)
 			),
 			UniquenessIndex(
 				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.usernameLookupKey, username(i)),
-				upmId(i)
+				id(i)
 			),
 			UniquenessIndex(
 				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.verifiedPhoneLookupKey, verifiedPhone(i)),
-				upmId(i)
+				id(i)
 			)
 		)).toDS()
 
 		val uniquenessIndexLookupDS = (0 until 100).flatMap(i => List(
 			UniquenessIndexLookup(
-				upmId(i),
-				UniquenessIndexKeyValue.nuIdLookupKey,
-				nuId(i)
+				id(i),
+				UniquenessIndexKeyValue.otherIdLookupKey,
+				otherId(i)
 			),
 			UniquenessIndexLookup(
-				upmId(i),
+				id(i),
 				UniquenessIndexKeyValue.usernameLookupKey,
 				username(i)
 			),
 			UniquenessIndexLookup(
-				upmId(i),
+				id(i),
 				UniquenessIndexKeyValue.verifiedPhoneLookupKey,
 				verifiedPhone(i)
 			)
@@ -119,7 +119,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			.foreach(uniquenessIndices => {
 				uniquenessIndices.length shouldEqual 3
 				val i = extractIdIndex(uniquenessIndices.head.value)
-				uniquenessIndices.exists(_.key.contains(nuId(i))) shouldBe true
+				uniquenessIndices.exists(_.key.contains(otherId(i))) shouldBe true
 				uniquenessIndices.exists(_.key.contains(username(i))) shouldBe true
 				uniquenessIndices.exists(_.key.contains(verifiedPhone(i))) shouldBe true
 			})
@@ -131,7 +131,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			.foreach(uniquenessLookupIndices => {
 				uniquenessLookupIndices.length shouldEqual 3
 				val i = extractIdIndex(uniquenessLookupIndices.head.id)
-				uniquenessLookupIndices.exists(_.value.contains(nuId(i))) shouldBe true
+				uniquenessLookupIndices.exists(_.value.contains(otherId(i))) shouldBe true
 				uniquenessLookupIndices.exists(_.value.contains(username(i))) shouldBe true
 				uniquenessLookupIndices.exists(_.value.contains(verifiedPhone(i))) shouldBe true
 			})
@@ -139,8 +139,8 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 		uniquenessIndexStatusRDD.foreach(_.count() shouldEqual 100)
 		def verifyFieldStatus = (fieldStatus: UniqueFieldStatus) => fieldStatus shouldEqual UniqueFieldStatus.pass
 		uniquenessIndexStatusRDD.foreach(_.collect.foreach(status => {
-			status.nuId.foreach(verifyFieldStatus)
-			status.nuIdLookup.foreach(verifyFieldStatus)
+			status.otherId.foreach(verifyFieldStatus)
+			status.otherIdLookup.foreach(verifyFieldStatus)
 			status.username.foreach(verifyFieldStatus)
 			status.usernameLookup.foreach(verifyFieldStatus)
 			status.verifiedPhone.foreach(verifyFieldStatus)
@@ -153,8 +153,8 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 
 		Given("an list of UniqueFields objects")
 		val uniqueFieldsObjs = Seq(UniqueFields(
-			upmId(),
-			Some(nuId()),
+			id(),
+			Some(otherId()),
 			Some(username()),
 			Some(verifiedPhone())
 		))
@@ -174,7 +174,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			.values
 			.foreach(uniquenessIndices => {
 				uniquenessIndices.length shouldEqual 3
-				uniquenessIndices.exists(_.key.contains(nuId())) shouldBe true
+				uniquenessIndices.exists(_.key.contains(otherId())) shouldBe true
 				uniquenessIndices.exists(_.key.contains(username())) shouldBe true
 				uniquenessIndices.exists(_.key.contains(verifiedPhone())) shouldBe true
 			})
@@ -185,7 +185,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			.values
 			.foreach(uniquenessLookupIndices => {
 				uniquenessLookupIndices.length shouldEqual 3
-				uniquenessLookupIndices.exists(_.value.contains(nuId())) shouldBe true
+				uniquenessLookupIndices.exists(_.value.contains(otherId())) shouldBe true
 				uniquenessLookupIndices.exists(_.value.contains(username())) shouldBe true
 				uniquenessLookupIndices.exists(_.value.contains(verifiedPhone())) shouldBe true
 			})
@@ -196,8 +196,8 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			fieldStatus.reason shouldEqual UniqueFieldStatus.missing
 		}
 		uniquenessIndexStatusRDD.foreach(_.collect.foreach(status => {
-			status.nuId.foreach(verifyFieldStatus)
-			status.nuIdLookup.foreach(verifyFieldStatus)
+			status.otherId.foreach(verifyFieldStatus)
+			status.otherIdLookup.foreach(verifyFieldStatus)
 			status.username.foreach(verifyFieldStatus)
 			status.usernameLookup.foreach(verifyFieldStatus)
 			status.verifiedPhone.foreach(verifyFieldStatus)
@@ -213,8 +213,8 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 
 		Given("an list of UniqueFields objects")
 		val uniqueFieldsObjs = Seq(UniqueFields(
-			upmId(),
-			Some(nuId()),
+			id(),
+			Some(otherId()),
 			Some(username()),
 			Some(verifiedPhone())
 		))
@@ -222,32 +222,32 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 		Given("existing uniqueness index and uniqueness index lookup entries with conflicting data")
 		val uniquenessIndexDS = List(
 			UniquenessIndex(
-				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId()),
-				upmId(1)
+				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId()),
+				id(1)
 			),
 			UniquenessIndex(
 				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.usernameLookupKey, username()),
-				upmId(1)
+				id(1)
 			),
 			UniquenessIndex(
 				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.verifiedPhoneLookupKey, verifiedPhone()),
-				upmId(1)
+				id(1)
 			)
 		).toDS()
 
 		val uniquenessIndexLookupDS = List(
 			UniquenessIndexLookup(
-				upmId(),
-				UniquenessIndexKeyValue.nuIdLookupKey,
-				nuId(1)
+				id(),
+				UniquenessIndexKeyValue.otherIdLookupKey,
+				otherId(1)
 			),
 			UniquenessIndexLookup(
-				upmId(),
+				id(),
 				UniquenessIndexKeyValue.usernameLookupKey,
 				username(1)
 			),
 			UniquenessIndexLookup(
-				upmId(),
+				id(),
 				UniquenessIndexKeyValue.verifiedPhoneLookupKey,
 				verifiedPhone(1)
 			)
@@ -281,7 +281,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			.values
 			.foreach(uniquenessIndices => {
 				uniquenessIndices.length shouldEqual 3
-				uniquenessIndices.exists(_.key.contains(nuId())) shouldBe true
+				uniquenessIndices.exists(_.key.contains(otherId())) shouldBe true
 				uniquenessIndices.exists(_.key.contains(username())) shouldBe true
 				uniquenessIndices.exists(_.key.contains(verifiedPhone())) shouldBe true
 			})
@@ -292,7 +292,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			.values
 			.foreach(uniquenessLookupIndices => {
 				uniquenessLookupIndices.length shouldEqual 3
-				uniquenessLookupIndices.exists(_.value.contains(nuId())) shouldBe true
+				uniquenessLookupIndices.exists(_.value.contains(otherId())) shouldBe true
 				uniquenessLookupIndices.exists(_.value.contains(username())) shouldBe true
 				uniquenessLookupIndices.exists(_.value.contains(verifiedPhone())) shouldBe true
 			})
@@ -303,11 +303,11 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 			fieldStatus.reason shouldEqual UniqueFieldStatus.conflict(existing, populated)
 		}
 		uniquenessIndexStatusRDD.foreach(_.collect.foreach(status => {
-			status.nuId.foreach(verifyFieldStatus(_, upmId(1), upmId()))
-			status.nuIdLookup.foreach(verifyFieldStatus(_, nuId(1), nuId()))
-			status.username.foreach(verifyFieldStatus(_, upmId(1), upmId()))
+			status.otherId.foreach(verifyFieldStatus(_, id(1), id()))
+			status.otherIdLookup.foreach(verifyFieldStatus(_, otherId(1), otherId()))
+			status.username.foreach(verifyFieldStatus(_, id(1), id()))
 			status.usernameLookup.foreach(verifyFieldStatus(_, username(1), username()))
-			status.verifiedPhone.foreach(verifyFieldStatus(_, upmId(1), upmId()))
+			status.verifiedPhone.foreach(verifyFieldStatus(_, id(1), id()))
 			status.verifiedPhoneLookup.foreach(verifyFieldStatus(_, verifiedPhone(1), verifiedPhone()))
 		}))
 	}
@@ -316,7 +316,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 		val cc = CassandraConnector(sc.getConf)
 
 		Given("an list of UniqueFields objects")
-		val uniqueFieldsObjs = Seq(UniqueFields(upmId()))
+		val uniqueFieldsObjs = Seq(UniqueFields(id()))
 
 		When("processing UniqueFields objects")
 		sc.parallelize(uniqueFieldsObjs)
@@ -332,8 +332,8 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 		uniquenessLookupIndexRDD.count() shouldEqual 0
 		uniquenessIndexStatusRDD.foreach(_.count() shouldEqual 1)
 		uniquenessIndexStatusRDD.foreach(_.collect.foreach(status => {
-			status.nuId shouldBe None
-			status.nuIdLookup shouldBe None
+			status.otherId shouldBe None
+			status.otherIdLookup shouldBe None
 			status.username shouldBe None
 			status.usernameLookup shouldBe None
 			status.verifiedPhone shouldBe None
@@ -349,7 +349,7 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 
 		Given("an list of UniqueFields objects with corrupt data")
 		val uniqueFieldsObjs = Seq(UniqueFields(
-			upmId(),
+			id(),
 			username = Some(corrupt())
 		))
 
@@ -357,13 +357,13 @@ class UniquenessIndexProcessorTest extends AbstractSparkTest
 		val uniquenessIndexDS = List(
 			UniquenessIndex(
 				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.usernameLookupKey, corrupt()),
-				upmId()
+				id()
 			)
 		).toDS()
 
 		val uniquenessIndexLookupDS = List(
 			UniquenessIndexLookup(
-				upmId(),
+				id(),
 				UniquenessIndexKeyValue.usernameLookupKey,
 				corrupt()
 			)

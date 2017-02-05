@@ -1,6 +1,6 @@
 package spark.model
 
-import spark.model.Identity._
+import spark.model.Template._
 
 /**
 	*
@@ -9,16 +9,16 @@ import spark.model.Identity._
 object Common {
 
 	case class UniquenessFields(
-		upmId: String,
-		nuIds: List[String] = List(),
+		id: String,
+		otherIds: List[String] = List(),
 		usernames: List[String] = List(),
 		verifiedPhones: List[String] = List()
 	)
 	object UniquenessFields {
 		def from(data: UniquenessIndex): UniquenessFields = data match {
-			case d if d.key.contains(UniquenessIndexKeyValue.nuIdLookupKey) => UniquenessFields(
+			case d if d.key.contains(UniquenessIndexKeyValue.otherIdLookupKey) => UniquenessFields(
 				d.value,
-				nuIds = List(UniquenessIndexKeyValue.valueFrom(d.key))
+				otherIds = List(UniquenessIndexKeyValue.valueFrom(d.key))
 			)
 			case d if d.key.contains(UniquenessIndexKeyValue.usernameLookupKey) => UniquenessFields(
 				d.value,
@@ -29,13 +29,13 @@ object Common {
 				verifiedPhones = List(UniquenessIndexKeyValue.valueFrom(d.key))
 			)
 		}
-		def +(a: UniquenessFields, b: UniquenessFields) = {
-			if (a.upmId != b.upmId) {
-				throw new IllegalArgumentException("upmIds must match for UniquenessFields combination")
+		def +(a: UniquenessFields, b: UniquenessFields): UniquenessFields = {
+			if (a.id != b.id) {
+				throw new IllegalArgumentException("ids must match for UniquenessFields combination")
 			}
 			UniquenessFields(
-				a.upmId,
-				a.nuIds ++ b.nuIds,
+				a.id,
+				a.otherIds ++ b.otherIds,
 				a.usernames ++ b.usernames,
 				a.verifiedPhones ++ b.verifiedPhones
 			)
@@ -49,12 +49,11 @@ object Common {
 
 // Helper class used to aggregate fields which are considered *unique* across all models
 case class UniqueFields(
-	upmId: String,
-	nuId: Option[String] = None,
+	id: String,
+	otherId: Option[String] = None,
 	username: Option[String] = None,
 	verifiedPhone: Option[String] = None
 )
 object UniqueFields {
-	def from(data: IdentityOmega) = UniqueFields(data.user_upm_id)
-	def from(data: RawIdentityEvent) = UniqueFields(data.id)
+	def from(data: RawEvent) = UniqueFields(data.id)
 }

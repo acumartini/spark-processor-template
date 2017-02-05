@@ -6,10 +6,10 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{SparkConf, SparkContext}
 import org.rogach.scallop.{ScallopConf, ScallopOption}
-import spark.cassandra.IdentityDB.{OldUniquenessIndex, OldUniquenessLookupIndex, UniquenessIndexTable, UniquenessLookupIndexTable}
-import spark.cassandra.{Connector, IdentityDB}
-import spark.model.{RawIdentityEvent, UniqueFields}
-import spark.processor.{UniqueFieldsPopulationProcessor, UniqueUpmIdProcessor, UniquenessIndexProcessor, UniquenessIndexWriteProcessor}
+import spark.cassandra.TemplateDB.{OldUniquenessIndex, OldUniquenessLookupIndex, UniquenessIndexTable, UniquenessLookupIndexTable}
+import spark.cassandra.{Connector, TemplateDB}
+import spark.model.{RawEvent, UniqueFields}
+import spark.processor.{UniqueFieldsPopulationProcessor, UniqueIdProcessor, UniquenessIndexProcessor, UniquenessIndexWriteProcessor}
 
 /**
 	*
@@ -26,7 +26,7 @@ object UniquenessIndexGeneratorPOC {
 		val conf: SparkConf = new SparkConf()
 			.setAppName("CassandraConnectorPOC")
 			.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-			.registerKryoClasses(Array(classOf[RawIdentityEvent], classOf[UniqueFields]))
+			.registerKryoClasses(Array(classOf[RawEvent], classOf[UniqueFields]))
 			.set("spark.cassandra.connection.host", params.host.getOrElse(Connector.host))
 			.set("spark.cassandra.connection.port", params.port.getOrElse(Connector.port).toString)
 			.set("spark.default.parallelism", "100")
@@ -39,13 +39,13 @@ object UniquenessIndexGeneratorPOC {
 			.getOrCreate()
 		import sqlContext.implicits._ // required for implicit Encoders
 
-		// load identity core events from Cassandra
+		// load template core events from Cassandra
 		val coreEvents = sqlContext
 			.read
 			.format("org.apache.spark.sql.cassandra")
-			.options(IdentityDB.CoreTable.keyspaceTableMap)
+			.options(TemplateDB.CoreTable.keyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 
 		// map events to uniqueIds RDD
 		val uniqueIds = coreEvents
@@ -53,17 +53,17 @@ object UniquenessIndexGeneratorPOC {
 			.persist(StorageLevel.MEMORY_AND_DISK_SER)
 		  .rdd
 
-		// dedup upmIds for each partition and write them to S3 as text files
-		val unpopulatedUniqueFieldsRDD = UniqueUpmIdProcessor.process(uniqueIds)
-			.map({ case(upmId, _) => UniqueFields(upmId) })
+		// dedup ids for each partition and write them to S3 as text files
+		val unpopulatedUniqueFieldsRDD = UniqueIdProcessor.process(uniqueIds)
+			.map({ case(id, _) => UniqueFields(id) })
 
 		// populate missing unique fields data
 		val populatedUniqueFieldsRDD = UniqueFieldsPopulationProcessor.extractAndProcess(
 			cc,
-			IdentityDB.CoreTable.keyspace,
-			IdentityDB.CoreTable.table,
-			IdentityDB.ContactTable.keyspace,
-			IdentityDB.ContactTable.table,
+			TemplateDB.CoreTable.keyspace,
+			TemplateDB.CoreTable.table,
+			TemplateDB.ContactTable.keyspace,
+			TemplateDB.ContactTable.table,
 			unpopulatedUniqueFieldsRDD
 		)
 

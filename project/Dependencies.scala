@@ -81,8 +81,8 @@ object Dependencies {
 
 	//// Modules
 
-	val idnProcessorCommon: Seq[ModuleID] = aws ++ cassandraCore ++ cassandraTest ++ utils ++ test
-	val idnProcessorSpark1_6: Seq[ModuleID] = spark1_6 ++ aws ++ utils ++ test ++ cassandraTest
-	val idnProcessorSpark2: Seq[ModuleID] = spark2 ++ aws ++ utils ++ test ++ cassandraTest
+	val processorCommon: Seq[ModuleID] = aws ++ cassandraCore ++ cassandraTest ++ utils ++ test
+	val processorSpark1_6: Seq[ModuleID] = spark1_6 ++ aws ++ utils ++ test ++ cassandraTest
+	val processorSpark2: Seq[ModuleID] = spark2 ++ aws ++ utils ++ test ++ cassandraTest
 
 }

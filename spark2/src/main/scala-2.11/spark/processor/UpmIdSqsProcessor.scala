@@ -4,14 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.rdd.RDD
 import spark.client.SQSClient
-import spark.message.UpmIdBatch
+import spark.message.IdBatch
 import spark.model.UniqueFields
 
 /**
 	* Accepts a RDD of UniqueFields, batches them by the given batch size, and sends them as batch messages to the given
 	* SQS queue.
 	*/
-object UpmIdSqsProcessor {
+object IdSqsProcessor {
 
 	def process(
 		data: RDD[UniqueFields],
@@ -28,10 +28,10 @@ object UpmIdSqsProcessor {
 
 				iter
 					.grouped(batchSize)
-					.map(UpmIdBatch.from)
+					.map(IdBatch.from)
 					.grouped(10)
 					.foreach(batch => sqs.client.sendMessageBatch(
-						UpmIdBatch.toSendMessageBatchRequest(queueUrl, mapper, batch)
+						IdBatch.toSendMessageBatchRequest(queueUrl, mapper, batch)
 					))
 			})
 	}

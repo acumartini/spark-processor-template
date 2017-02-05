@@ -15,9 +15,9 @@ import org.joda.time.DateTime
 import org.rogach.scallop.{ScallopConf, ScallopOption}
 import org.slf4j.LoggerFactory
 import spark.cassandra.Connector
-import spark.model.Identity.{CoreFields, IdentityPayload}
-import spark.model.{RawIdentityEvent, UniqueFields}
-import spark.processor.UniqueUpmIdProcessor
+import spark.model.Template.{CoreFields, EventPayload}
+import spark.model.{RawEvent, UniqueFields}
+import spark.processor.UniqueIdProcessor
 import spark.util.ScalaExtensions
 
 import scala.util.Random
@@ -54,7 +54,7 @@ object CassandraExtractionPOC {
 		val conf: SparkConf = new SparkConf()
 			.setAppName("CassandraConnectorPOC")
 			.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
-			.registerKryoClasses(Array(classOf[RawIdentityEvent], classOf[UniqueFields]))
+			.registerKryoClasses(Array(classOf[RawEvent], classOf[UniqueFields]))
 			.set("spark.cassandra.connection.host", host)
 			.set("spark.cassandra.connection.port", port.toString)
 			.set("spark.yarn.executor.memoryOverhead", "10G")
@@ -75,7 +75,7 @@ object CassandraExtractionPOC {
 				sc.hadoopConfiguration
 			)
 			.delete(
-				new Path(s"s3://$processorS3Bucket/test/upmIds/"),
+				new Path(s"s3://$processorS3Bucket/test/ids/"),
 				true
 			)
 
@@ -96,18 +96,18 @@ object CassandraExtractionPOC {
 		idRanges.foreach(idRange => {
 			val seedEvents = idRange.flatMap(i => {
 				eventRange.map(_ => {
-					IdentityPayload[CoreFields](
-						id = upmId(i),
-						time = IdentityPayload.time(randomTime),
+					EventPayload[CoreFields](
+						id = id(i),
+						time = EventPayload.time(randomTime),
 						set = CoreFields(
-							Some(upmId(i))
+							Some(id(i))
 						)
 					)
 				})
 			})
 				.map(payload => {
 					broadcastMapper.value.registerModule(DefaultScalaModule)
-					RawIdentityEvent.from(
+					RawEvent.from(
 						payload,
 						broadcastMapper.value.writeValueAsString(payload)
 					)
@@ -124,13 +124,13 @@ object CassandraExtractionPOC {
 		})
 		log.info(s"Generated and persisted [$numEvents] seed events for [$numUniqueUsers] unique user.")
 
-		// load identity core events from Cassandra
+		// load template core events from Cassandra
 		val coreEvents = sqlContext
 			.read
 			.format("org.apache.spark.sql.cassandra")
 			.options(mockEventsKeyspaceTableMap)
 			.load()
-			.as[RawIdentityEvent]
+			.as[RawEvent]
 
 		// map events to uniqueIds RDD
 		val uniqueIds = coreEvents
@@ -138,16 +138,16 @@ object CassandraExtractionPOC {
 			.persist(StorageLevel.MEMORY_AND_DISK_SER)
 		  .rdd
 
-		// dedup upmIds for each partition and write them to S3 as text files
-		UniqueUpmIdProcessor.process(uniqueIds)
-			.map({ case(upmId, _) => s"$upmId" })
-			.saveAsTextFile(s"s3://$processorS3Bucket/test/upmIds/")
+		// dedup ids for each partition and write them to S3 as text files
+		UniqueIdProcessor.process(uniqueIds)
+			.map({ case(id, _) => s"$id" })
+			.saveAsTextFile(s"s3://$processorS3Bucket/test/ids/")
 
 		// read dedup'ed ids back from S3 and verify count
-		val s3UniqueIds = sc.textFile(s"s3://$processorS3Bucket/test/upmIds/")
-			.map(upmId => (upmId, 1))
+		val s3UniqueIds = sc.textFile(s"s3://$processorS3Bucket/test/ids/")
+			.map(id => (id, 1))
 			.reduceByKey(_ + _)
-		log.info(s"Final Dedup'ed upmId count from S3 [${s3UniqueIds.count()}]")
+		log.info(s"Final Dedup'ed id count from S3 [${s3UniqueIds.count()}]")
 
 		// cleanup
 		cc.withSessionDo(truncateMockEventsTable)
@@ -155,7 +155,7 @@ object CassandraExtractionPOC {
 		sc.stop()
 	}
 
-	private def upmId(i: Int) = s"mock:upmId:$i"
+	private def id(i: Int) = s"mock:id:$i"
 	private def randomTime: DateTime = DateTime.now().minusDays(random.nextInt(100) + 1)
 	private def createMockEventsKeyspace(session: Session, numNodes: Int): Unit = session.execute(
 		s"""

@@ -5,17 +5,17 @@ import spark.model.UniqueFields
 import spark.{AbstractSparkTest, SparkS3TestBucket}
 
 
-class S3UpmIdDedupProcessorTest extends AbstractSparkTest
+class S3IdDedupProcessorTest extends AbstractSparkTest
 	with SparkS3TestBucket {
 
-	val appName = "S3UpmIdDedupProcessorTest"
+	val appName = "S3IdDedupProcessorTest"
 
 	override val conf: SparkConf = sparkConf
 
-	behavior of "S3UpmIdDedupProcessor"
+	behavior of "S3IdDedupProcessor"
 
-	it should "extract a set of unique upmIds from a collection of UniqueFields" in {
-		Given("UpmIds from any some source")
+	it should "extract a set of unique ids from a collection of UniqueFields" in {
+		Given("Ids from any some source")
 		val uniqueIds = sc.parallelize(Seq(
 			UniqueFields("1"),
 			UniqueFields("2"),
@@ -27,10 +27,10 @@ class S3UpmIdDedupProcessorTest extends AbstractSparkTest
 
 		When("UniqueFields persisted to S3")
 		val path = testDataPath // to prevent serialization errors caused by anonymous function (uniqueKeyFunc) below
-		S3UpmIdDedupProcessor.process[UniqueFields](
+		S3IdDedupProcessor.process[UniqueFields](
 			uniqueIds,
 			bucket,
-			(uniqueIds: UniqueFields) => s"$path/${uniqueIds.upmId}",
+			(uniqueIds: UniqueFields) => s"$path/${uniqueIds.id}",
 			s3 = s3
 		)
 

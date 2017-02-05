@@ -4,13 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.rdd.RDD
 import spark.client.SNSClient
-import spark.message.UpmIdBatch
+import spark.message.IdBatch
 import spark.model.UniqueFields
 
 /**
 	* Accepts a RDD of UniqueFields, batches them by the given batch size, and publishes them to the given SNS topic.
 	*/
-object UpmIdSnsProcessor {
+object IdSnsProcessor {
 
 	def process(
 		data: RDD[UniqueFields],
@@ -27,10 +27,10 @@ object UpmIdSnsProcessor {
 
 				iter
 					.grouped(batchSize)
-					.map(UpmIdBatch.from)
+					.map(IdBatch.from)
 				  .foreach(batch => sns.client.publish(
 					  topicArn,
-					  mapper.writeValueAsString(batch.upmIdBatch))
+					  mapper.writeValueAsString(batch.idBatch))
 				  )
 			})
 	}

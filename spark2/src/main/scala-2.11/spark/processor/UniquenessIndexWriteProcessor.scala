@@ -1,7 +1,7 @@
 package spark.processor
 
 import org.apache.spark.sql.{Dataset, SaveMode}
-import spark.model.Identity.{UniquenessIndex, UniquenessIndexLookup}
+import spark.model.Template.{UniquenessIndex, UniquenessIndexLookup}
 
 /**
 	* Accepts Datasets of UniquenessIndex and UniquenessIndexLookup, and writes them to the given tables without

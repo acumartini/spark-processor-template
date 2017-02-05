@@ -16,7 +16,7 @@ trait CassandraTable extends CassandraKeyspace {
 	def keyspaceTableMap: Map[String, String]
 }
 
-object IdentityDB extends CassandraDB {
+object TemplateDB extends CassandraDB {
 
 	object BioKeyspace extends CassandraKeyspace {
 		val keyspace = "bio"
@@ -73,7 +73,7 @@ object IdentityDB extends CassandraDB {
 	}
 
 	object IdnCacheKeyspace extends CassandraKeyspace {
-		val keyspace = "idncache"
+		val keyspace = "cache"
 	}
 	object OldUniquenessIndex extends CassandraTable {
 		val keyspace: String = IdnCacheKeyspace.keyspace

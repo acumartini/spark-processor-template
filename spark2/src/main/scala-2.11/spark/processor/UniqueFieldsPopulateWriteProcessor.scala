@@ -4,7 +4,7 @@ import com.datastax.spark.connector.cql.CassandraConnector
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.rdd.RDD
-import spark.model.Identity._
+import spark.model.Template._
 import spark.model.UniqueFields
 
 import scala.collection.JavaConverters._
@@ -35,30 +35,30 @@ object UniqueFieldsPopulateWriteProcessor {
 
 				//// Extract
 
-				var coreEvents = List.empty[IdentityEvent[IdentityPayload[CoreFields]]]
-				var contactEvents = List.empty[IdentityEvent[IdentityPayload[ContactFields]]]
+				var coreEvents = List.empty[Event[EventPayload[CoreFields]]]
+				var contactEvents = List.empty[Event[EventPayload[ContactFields]]]
 
-				if (uniqueFields.nuId.isEmpty || uniqueFields.username.isEmpty) {
+				if (uniqueFields.otherId.isEmpty || uniqueFields.username.isEmpty) {
 					// process core events
 					coreEvents = cc.withSessionDo(session => {
 						session.execute(
-							s"SELECT * FROM $coreKeyspace.$coreEventsTable WHERE id = '${uniqueFields.upmId}';"
+							s"SELECT * FROM $coreKeyspace.$coreEventsTable WHERE id = '${uniqueFields.id}';"
 						)
 							.all
 							.asScala
 							.flatMap(rawEvent =>
 								Option(rawEvent.getString("payload")).map(e =>
-									IdentityEvent.from(
-										IdentityPayload.from[CoreFields](
+									Event.from(
+										EventPayload.from[CoreFields](
 											mapper.readTree(e),
 											mapper
 										)
 									))
 							)
 							.filter(event =>
-								event.payload.set.nuId.nonEmpty ||
+								event.payload.set.otherId.nonEmpty ||
 									event.payload.set.username.nonEmpty ||
-									event.payload.rem.exists(rem => rem == "nuId" || rem == "username")
+									event.payload.rem.exists(rem => rem == "otherId" || rem == "username")
 							)
 							.sortBy(_.datetime)
 							.toList
@@ -69,22 +69,22 @@ object UniqueFieldsPopulateWriteProcessor {
 					// process contact events
 					contactEvents = cc.withSessionDo(session => {
 						session.execute(
-							s"SELECT * FROM $contactKeyspace.$contactEventsTable WHERE id = '${uniqueFields.upmId}';"
+							s"SELECT * FROM $contactKeyspace.$contactEventsTable WHERE id = '${uniqueFields.id}';"
 						)
 							.all
 							.asScala
 							.flatMap(rawEvent =>
 								Option(rawEvent.getString("payload")).map(e =>
-									IdentityEvent.from(
-										IdentityPayload.from[ContactFields](
+									Event.from(
+										EventPayload.from[ContactFields](
 											mapper.readTree(e),
 											mapper
 										)
 									))
 							)
 							.filter(event =>
-								event.payload.set.verifiedphone.nonEmpty ||
-									event.payload.rem.contains("verifiedphone")
+								event.payload.set.phone.nonEmpty ||
+									event.payload.rem.contains("phone")
 							)
 							.sortBy(_.datetime)
 							.toList
@@ -93,40 +93,40 @@ object UniqueFieldsPopulateWriteProcessor {
 
 				//// Populate
 
-				var nuId = uniqueFields.nuId
+				var otherId = uniqueFields.otherId
 				var username = uniqueFields.username
 				var verifiedPhone = uniqueFields.verifiedPhone
 
 				coreEvents.foreach(event => {
 					event.payload.rem.foreach(rem => {
-						if (rem == "nuId") {
-							nuId = None
+						if (rem == "otherId") {
+							otherId = None
 						} else if (rem == "username") {
 							username = None
 						}
 					})
-					event.payload.set.nuId.foreach(newNuId => nuId = Some(newNuId))
+					event.payload.set.otherId.foreach(newOtherId => otherId = Some(newOtherId))
 					event.payload.set.username.foreach(newUsername => username = Some(newUsername))
 				})
 
 				contactEvents.foreach(event => {
-					if (event.payload.rem.contains("verifiedphone")) {
+					if (event.payload.rem.contains("phone")) {
 						verifiedPhone = None
 					}
-					event.payload.set.verifiedphone.foreach(newVerifiedPhone => verifiedPhone = Some(newVerifiedPhone))
+					event.payload.set.phone.foreach(newVerifiedPhone => verifiedPhone = Some(newVerifiedPhone))
 				})
 
 				//// Write
 
-				if (nuId.nonEmpty)  {
+				if (otherId.nonEmpty)  {
 					cc.withSessionDo(session => {
 						session.execute(
 							s"""
 								 |INSERT INTO $uniquenessIndexKeyspace.$uniquenessIndexTable
 								 |  ( key, value )
 								 |  VALUES (
-								 |    '${UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId.get)}',
-								 |    '${uniqueFields.upmId}' );
+								 |    '${UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId.get)}',
+								 |    '${uniqueFields.id}' );
 							""".stripMargin
 						)
 					})
@@ -136,9 +136,9 @@ object UniqueFieldsPopulateWriteProcessor {
 								 |INSERT INTO $uniquenessIndexKeyspace.$uniquenessIndexLookup
 								 |  ( id, key, value )
 								 |  VALUES (
-								 |    '${uniqueFields.upmId}',
-								 |    '${UniquenessIndexKeyValue.nuIdLookupKey}',
-								 |    '${nuId.get}' );
+								 |    '${uniqueFields.id}',
+								 |    '${UniquenessIndexKeyValue.otherIdLookupKey}',
+								 |    '${otherId.get}' );
 							""".stripMargin
 						)
 					})
@@ -151,7 +151,7 @@ object UniqueFieldsPopulateWriteProcessor {
 								 |  ( key, value )
 								 |  VALUES (
 								 |    '${UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.usernameLookupKey, username.get)}',
-								 |    '${uniqueFields.upmId}' );
+								 |    '${uniqueFields.id}' );
 							""".stripMargin
 						)
 					})
@@ -161,7 +161,7 @@ object UniqueFieldsPopulateWriteProcessor {
 								 |INSERT INTO $uniquenessIndexKeyspace.$uniquenessIndexLookup
 								 |  ( id, key, value )
 								 |  VALUES (
-								 |    '${uniqueFields.upmId}',
+								 |    '${uniqueFields.id}',
 								 |    '${UniquenessIndexKeyValue.usernameLookupKey}',
 								 |    '${username.get}' );
 							""".stripMargin
@@ -176,7 +176,7 @@ object UniqueFieldsPopulateWriteProcessor {
 								 |  ( key, value )
 								 |  VALUES (
 								 |    '${UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.verifiedPhoneLookupKey, verifiedPhone.get)}',
-								 |    '${uniqueFields.upmId}' );
+								 |    '${uniqueFields.id}' );
 							""".stripMargin
 						)
 					})
@@ -186,7 +186,7 @@ object UniqueFieldsPopulateWriteProcessor {
 								 |INSERT INTO $uniquenessIndexKeyspace.$uniquenessIndexLookup
 								 |  ( id, key, value )
 								 |  VALUES (
-								 |    '${uniqueFields.upmId}',
+								 |    '${uniqueFields.id}',
 								 |    '${UniquenessIndexKeyValue.verifiedPhoneLookupKey}',
 								 |    '${verifiedPhone.get}' );
 							""".stripMargin

@@ -5,7 +5,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.sql.SaveMode
 import spark.cassandra.MockTables.{UniquenessIndexLookupTable, UniquenessIndexTable}
 import spark.cassandra.{DBCleanupBeforeAndAfterEach, TestConnector}
-import spark.model.Identity.{UniquenessIndex, UniquenessIndexKeyValue, UniquenessIndexLookup}
+import spark.model.Template.{UniquenessIndex, UniquenessIndexKeyValue, UniquenessIndexLookup}
 import spark.{AbstractSparkTest, SparkSqlContext}
 
 class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
@@ -30,8 +30,8 @@ class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
 
 	behavior of "UniquenessIndexWriteProcessor"
 
-	def upmId(i: Int = 0) = s"mock:upmId:$i"
-	def nuId(i: Int = 0) = s"mock:nuId:$i"
+	def id(i: Int = 0) = s"mock:id:$i"
+	def otherId(i: Int = 0) = s"mock:otherId:$i"
 	def username(i: Int = 0) = s"mock:username:$i"
 	def verifiedPhone(i: Int = 0) = s"mock:verifiedPhone:$i"
 
@@ -64,32 +64,32 @@ class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
 		Given("a DS of UniquenessIndex and a DS of UniquenessIndexLookup")
 		val uniquenessIndexDS = List(
 			UniquenessIndex(
-				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId()),
-				upmId()
+				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId()),
+				id()
 			),
 			UniquenessIndex(
 				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.usernameLookupKey, username()),
-				upmId()
+				id()
 			),
 			UniquenessIndex(
 				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.verifiedPhoneLookupKey, verifiedPhone()),
-				upmId()
+				id()
 			)
 		).toDS()
 
 		val uniquenessIndexLookupDS = List(
 			UniquenessIndexLookup(
-				upmId(),
-				UniquenessIndexKeyValue.nuIdLookupKey,
-				nuId()
+				id(),
+				UniquenessIndexKeyValue.otherIdLookupKey,
+				otherId()
 			),
 			UniquenessIndexLookup(
-				upmId(),
+				id(),
 				UniquenessIndexKeyValue.usernameLookupKey,
 				username()
 			),
 			UniquenessIndexLookup(
-				upmId(),
+				id(),
 				UniquenessIndexKeyValue.verifiedPhoneLookupKey,
 				verifiedPhone()
 			)
@@ -110,36 +110,36 @@ class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
 			cc,
 			keyspace,
 			UniquenessIndexTable.tableName(appName),
-			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId())
-		) shouldBe Some(upmId())
+			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId())
+		) shouldBe Some(id())
 
 		getIdFromUniquenessTable(
 			cc,
 			keyspace,
 			UniquenessIndexTable.tableName(appName),
 			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.usernameLookupKey, username())
-		) shouldBe Some(upmId())
+		) shouldBe Some(id())
 
 		getIdFromUniquenessTable(
 			cc,
 			keyspace,
 			UniquenessIndexTable.tableName(appName),
 			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.verifiedPhoneLookupKey, verifiedPhone())
-		) shouldBe Some(upmId())
+		) shouldBe Some(id())
 
 		getValueFromUniquenessLookupTable(
 			cc,
 			keyspace,
 			UniquenessIndexLookupTable.tableName(appName),
-			upmId(),
-			UniquenessIndexKeyValue.nuIdLookupKey
-		) shouldBe Some(nuId())
+			id(),
+			UniquenessIndexKeyValue.otherIdLookupKey
+		) shouldBe Some(otherId())
 
 		getValueFromUniquenessLookupTable(
 			cc,
 			keyspace,
 			UniquenessIndexLookupTable.tableName(appName),
-			upmId(),
+			id(),
 			UniquenessIndexKeyValue.usernameLookupKey
 		) shouldBe Some(username())
 
@@ -147,7 +147,7 @@ class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
 			cc,
 			keyspace,
 			UniquenessIndexLookupTable.tableName(appName),
-			upmId(),
+			id(),
 			UniquenessIndexKeyValue.verifiedPhoneLookupKey
 		) shouldBe Some(verifiedPhone())
 	}
@@ -156,19 +156,19 @@ class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
 		val sqlContext = sqx // required for implicit Encoders
 		import sqlContext.implicits._ // required for implicit Encoders
 
-		Given("a nuId entry for the user exists in the uniqueness index and lookup tables")
+		Given("a otherId entry for the user exists in the uniqueness index and lookup tables")
 		val existingUniquenessIndexDS = List(
 			UniquenessIndex(
-				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId()),
-				upmId()
+				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId()),
+				id()
 			)
 		).toDS()
 
 		val existingUniquenessIndexLookupDS = List(
 			UniquenessIndexLookup(
-				upmId(),
-				UniquenessIndexKeyValue.nuIdLookupKey,
-				nuId()
+				id(),
+				UniquenessIndexKeyValue.otherIdLookupKey,
+				otherId()
 			)
 		).toDS()
 
@@ -187,25 +187,25 @@ class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
 		Given("a DS of UniquenessIndex and a DS of UniquenessIndexLookup")
 		val uniquenessIndexDS = List(
 			UniquenessIndex(
-				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId(1)),
-				upmId()
+				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId(1)),
+				id()
 			),
 			UniquenessIndex(
-				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId(2)),
-				upmId(1)
+				UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId(2)),
+				id(1)
 			)
 		).toDS()
 
 		val uniquenessIndexLookupDS = List(
 			UniquenessIndexLookup(
-				upmId(),
-				UniquenessIndexKeyValue.nuIdLookupKey,
-				nuId(1)
+				id(),
+				UniquenessIndexKeyValue.otherIdLookupKey,
+				otherId(1)
 			),
 			UniquenessIndexLookup(
-				upmId(1),
-				UniquenessIndexKeyValue.nuIdLookupKey,
-				nuId(2)
+				id(1),
+				UniquenessIndexKeyValue.otherIdLookupKey,
+				otherId(2)
 			)
 		).toDS()
 
@@ -225,30 +225,30 @@ class UniquenessIndexWriteProcessorTest extends AbstractSparkTest
 			cc,
 			keyspace,
 			UniquenessIndexTable.tableName(appName),
-			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId(1))
-		) shouldBe Some(upmId())
+			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId(1))
+		) shouldBe Some(id())
 		getValueFromUniquenessLookupTable(
 			cc,
 			keyspace,
 			UniquenessIndexLookupTable.tableName(appName),
-			upmId(),
-			UniquenessIndexKeyValue.nuIdLookupKey
-		) shouldBe Some(nuId(1))
+			id(),
+			UniquenessIndexKeyValue.otherIdLookupKey
+		) shouldBe Some(otherId(1))
 
 		Then("new data is added")
 		getIdFromUniquenessTable(
 			cc,
 			keyspace,
 			UniquenessIndexTable.tableName(appName),
-			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.nuIdLookupKey, nuId(2))
-		) shouldBe Some(upmId(1))
+			UniquenessIndexKeyValue.keyFor(UniquenessIndexKeyValue.otherIdLookupKey, otherId(2))
+		) shouldBe Some(id(1))
 		getValueFromUniquenessLookupTable(
 			cc,
 			keyspace,
 			UniquenessIndexLookupTable.tableName(appName),
-			upmId(1),
-			UniquenessIndexKeyValue.nuIdLookupKey
-		) shouldBe Some(nuId(2))
+			id(1),
+			UniquenessIndexKeyValue.otherIdLookupKey
+		) shouldBe Some(otherId(2))
 	}
 
 }

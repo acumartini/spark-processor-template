@@ -14,7 +14,7 @@ import scala.reflect.ClassTag
 /**
 	* Uses S3 as a dedup'ing mechanism by storing text files with with names as unique keys.
 	*/
-object S3UpmIdDedupProcessor {
+object S3IdDedupProcessor {
 
 	def process[T <: Any: ClassTag](
 		data: RDD[T],
