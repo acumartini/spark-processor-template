@@ -1,0 +1,20 @@
+### Scala template
+*.class
+*.log
+
+# sbt specific
+.cache
+.history
+.lib/
+dist/*
+target/
+target-2.10/
+target-2.11/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+
+.idea/
+
+logs/
